@@ -54,11 +54,42 @@ const Login = () => {
       .then((response) => response.json())
       .then((data) => {
         setUserData(data); // Store the user data
+        if (data.adaccounts && data.adaccounts.data.length > 0) {
+          // Fetch ad account details for each account ID
+          fetchAdAccountDetails(data.adaccounts.data, accessToken);
+        }
       })
       .catch((error) => {
         setError('Error fetching data');
         console.error(error);
       });
+  };
+
+  // Function to fetch ad account details (brand names and ad account names)
+  const fetchAdAccountDetails = (adAccounts, accessToken) => {
+    adAccounts.forEach((adAccount) => {
+      const adAccountUrl = `https://graph.facebook.com/v22.0/${adAccount.id}?fields=name,account_id&access_token=${accessToken}`;
+
+      fetch(adAccountUrl)
+        .then((response) => response.json())
+        .then((adAccountData) => {
+          adAccount.name = adAccountData.name;
+          adAccount.account_name = adAccountData.account_id;
+
+          // Update user data with ad account details
+          setUserData((prevState) => ({
+            ...prevState,
+            adaccounts: {
+              data: prevState.adaccounts.data.map((account) =>
+                account.id === adAccount.id ? adAccount : account
+              ),
+            },
+          }));
+        })
+        .catch((error) => {
+          console.error('Error fetching ad account details:', error);
+        });
+    });
   };
 
   return (
@@ -78,8 +109,9 @@ const Login = () => {
             <ul>
               {userData.adaccounts.data.map((adAccount) => (
                 <li key={adAccount.id}>
-                  <p><strong>Account ID:</strong> {adAccount.account_id}</p>
                   <p><strong>Ad Account ID:</strong> {adAccount.id}</p>
+                  <p><strong>Account Name:</strong> {adAccount.name}</p>
+                  <p><strong>Brand Name (Account ID):</strong> {adAccount.account_name}</p>
                 </li>
               ))}
             </ul>
