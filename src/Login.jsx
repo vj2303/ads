@@ -88,7 +88,7 @@ const Login = () => {
         .then((data) => {
           setAdAccounts((prevAccounts) => [
             ...prevAccounts,
-            ...data.data,
+            { businessId: business.id, adAccounts: data.data },
           ]);
         })
         .catch((error) => {
@@ -155,8 +155,8 @@ const Login = () => {
             <p><strong>Name:</strong> {userData.name}</p>
             <p><strong>Email:</strong> {userData.email}</p>
 
-            <h3 style={styles.subheading}>Ad Accounts:</h3>
-            <div style={styles.checkboxContainer}>
+            {/* <h3 style={styles.subheading}>Ad Accounts:</h3> */}
+            {/* <div style={styles.checkboxContainer}>
               <input
                 type="checkbox"
                 checked={selectedAccounts.length === userData.adaccounts.data.length}
@@ -164,20 +164,20 @@ const Login = () => {
                 style={styles.checkbox}
               />
               <label>Select All</label>
-            </div>
+            </div> */}
 
             {userData.adaccounts && userData.adaccounts.data.length > 0 ? (
               userData.adaccounts.data.map((adAccount) => (
                 <div key={adAccount.id} style={styles.accountItem}>
-                  <input
+                  {/* <input
                     type="checkbox"
                     checked={selectedAccounts.includes(adAccount.id)}
                     onChange={(e) => handleAccountSelection(e, adAccount.id)}
                     style={styles.checkbox}
-                  />
-                  <label>
+                  /> */}
+                  {/* <label>
                     {adAccount.brand_name} ({adAccount.account_name})
-                  </label>
+                  </label> */}
                 </div>
               ))
             ) : (
@@ -187,16 +187,27 @@ const Login = () => {
             {adAccounts && adAccounts.length > 0 ? (
               <>
                 <h3 style={styles.subheading}>Brand Ad Accounts:</h3>
-                <ul>
-                  {adAccounts.map((adAccount) => (
-                    <li key={adAccount.id}>{adAccount.name}</li>
+                <div>
+                  {adAccounts.map((businessAdAccounts) => (
+                    <div key={businessAdAccounts.businessId}>
+                      <h4 style={styles.businessName}>
+                        {businesses.find((business) => business.id === businessAdAccounts.businessId)?.name}
+                      </h4>
+                      <ul>
+                        {businessAdAccounts.adAccounts.map((adAccount) => (
+                          <li key={adAccount.id} style={styles.adAccountItem}>
+                            {adAccount.name}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
                   ))}
-                </ul>
+                </div>
               </>
             ) : (
               <p>No brand ad accounts available.</p>
             )}
-
+{/* 
             {businesses && businesses.length > 0 ? (
               <>
                 <h3 style={styles.subheading}>Businesses:</h3>
@@ -208,7 +219,7 @@ const Login = () => {
               </>
             ) : (
               <p>No businesses available.</p>
-            )}
+            )} */}
           </div>
         )}
 
@@ -225,15 +236,15 @@ const styles = {
     alignItems: 'center',
     height: '100vh',
     backgroundColor: '#f0f8ff',
+    fontFamily: 'Arial, sans-serif',
   },
   card: {
     padding: '20px',
     backgroundColor: '#fff',
     borderRadius: '10px',
     boxShadow: '0 4px 8px rgba(0, 0, 0, 0.1)',
-    width: '300px',
+    width: '350px',
     textAlign: 'center',
-    fontFamily: 'Arial, sans-serif',
   },
   subheading: {
     color: '#FF6347',
@@ -263,10 +274,19 @@ const styles = {
     marginBottom: '10px',
     textAlign: 'left',
   },
+  adAccountItem: {
+    marginLeft: '30px',
+    marginBottom: '5px',
+    fontSize: '14px',
+  },
   userInfo: {
     marginTop: '20px',
     color: '#333',
-  }
+  },
+  businessName: {
+    fontWeight: 'bold',
+    color: '#007BFF',
+  },
 };
 
 export default Login;
