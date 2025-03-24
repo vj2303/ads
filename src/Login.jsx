@@ -5,6 +5,7 @@ const Login = () => {
   const [error, setError] = useState(null);
   const [selectedAccounts, setSelectedAccounts] = useState([]);
   const [businesses, setBusinesses] = useState([]);
+  const [adAccounts, setAdAccounts] = useState([]); // New state for brand ad accounts
 
   // Function to load the Facebook SDK
   useEffect(() => {
@@ -42,7 +43,7 @@ const Login = () => {
       } else {
         alert('Login was cancelled or failed');
       }
-    }, { scope: 'ads_read, business_management', return_scopes: true }); // Added business_management to scope
+    }, { scope: 'ads_read, business_management', return_scopes: true });
   };
 
   const fetchUserData = (accessToken) => {
@@ -64,34 +65,51 @@ const Login = () => {
 
   // Fetch businesses (brand names)
   const fetchBusinesses = (accessToken) => {
-    const businessesUrl = `https://graph.facebook.com/v2.0/me/businesses?fields=id,name&access_token=${accessToken}`;
+    const businessesUrl = `https://graph.facebook.com/v19.0/me/businesses?fields=id,name&limit=100&access_token=${accessToken}`;
 
     fetch(businessesUrl)
       .then((response) => response.json())
       .then((data) => {
         setBusinesses(data.data); // Set the list of businesses (brand names)
+        fetchBrandAdAccounts(data.data, accessToken); // Fetch ad accounts for each business
       })
       .catch((error) => {
         console.error('Error fetching businesses:', error);
       });
   };
 
+  // Fetch brand ad accounts for each business
+  const fetchBrandAdAccounts = (businesses, accessToken) => {
+    businesses.forEach((business) => {
+      const brandAdAccountUrl = `https://graph.facebook.com/v22.0/${business.id}/owned_ad_accounts?fields=id,name&access_token=${accessToken}`;
+
+      fetch(brandAdAccountUrl)
+        .then((response) => response.json())
+        .then((data) => {
+          setAdAccounts((prevAccounts) => [
+            ...prevAccounts,
+            ...data.data,
+          ]);
+        })
+        .catch((error) => {
+          console.error('Error fetching brand ad accounts:', error);
+        });
+    });
+  };
+
   // Function to fetch ad account details
   const fetchAdAccountDetails = (adAccounts, accessToken) => {
     adAccounts.forEach((adAccount) => {
-      const adAccountUrl = `https://graph.facebook.com/v22.0/${adAccount.id}?fields=name,account_id&access_token=${accessToken}`;
+      const adAccountUrl = `https://graph.facebook.com/v22.0/${adAccount.id}?fields=name,account_id,business&access_token=${accessToken}`;
 
       fetch(adAccountUrl)
         .then((response) => response.json())
         .then((adAccountData) => {
           adAccount.name = adAccountData.name;
           adAccount.account_name = adAccountData.account_id;
+          adAccount.business_id = adAccountData.business?.id;
 
-          // Map brand name to the ad account based on business ID
-          const brand = businesses.find((business) => business.id === adAccountData.business?.id);
-          adAccount.brand_name = brand ? brand.name : "No Brand";
-
-          // Update user data with ad account details
+          // Update user data with ad account details and associated brand
           setUserData((prevState) => ({
             ...prevState,
             adaccounts: {
@@ -158,12 +176,38 @@ const Login = () => {
                     style={styles.checkbox}
                   />
                   <label>
-                    {adAccount.brand_name} ({adAccount.account_name}) {/* Display Brand Name and Account ID */}
+                    {adAccount.brand_name} ({adAccount.account_name})
                   </label>
                 </div>
               ))
             ) : (
               <p>No ad accounts available.</p>
+            )}
+
+            {adAccounts && adAccounts.length > 0 ? (
+              <>
+                <h3 style={styles.subheading}>Brand Ad Accounts:</h3>
+                <ul>
+                  {adAccounts.map((adAccount) => (
+                    <li key={adAccount.id}>{adAccount.name}</li>
+                  ))}
+                </ul>
+              </>
+            ) : (
+              <p>No brand ad accounts available.</p>
+            )}
+
+            {businesses && businesses.length > 0 ? (
+              <>
+                <h3 style={styles.subheading}>Businesses:</h3>
+                <ul>
+                  {businesses.map((business) => (
+                    <li key={business.id}>{business.name}</li>
+                  ))}
+                </ul>
+              </>
+            ) : (
+              <p>No businesses available.</p>
             )}
           </div>
         )}
