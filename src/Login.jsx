@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
 
-const Login = () => {
+const Dashboard = () => {
   const [userData, setUserData] = useState(null);
-  const [error, setError] = useState(null);
-  const [selectedAccounts, setSelectedAccounts] = useState([]);
   const [businesses, setBusinesses] = useState([]);
-  const [adAccounts, setAdAccounts] = useState([]); // New state for brand ad accounts
+  const [adAccounts, setAdAccounts] = useState([]);
+  const [selectedBusinessId, setSelectedBusinessId] = useState(null);
+  const [selectedSection, setSelectedSection] = useState('userInfo');
+  const [error, setError] = useState(null);
 
   // Function to load the Facebook SDK
   useEffect(() => {
@@ -14,7 +15,7 @@ const Login = () => {
 
       window.fbAsyncInit = function () {
         FB.init({
-          appId: '750785526415113',  // Replace with your actual Facebook App ID
+          appId: '750785526415113', // Replace with your actual Facebook App ID
           cookie: true,
           xfbml: true,
           version: 'v22.0',
@@ -34,12 +35,13 @@ const Login = () => {
     loadFbSdk();
   }, []);
 
+  // Login with Facebook Ads permissions
   const loginWithAdsPermission = () => {
     FB.login(function (response) {
       if (response.authResponse) {
         const accessToken = response.authResponse.accessToken;
         fetchUserData(accessToken);
-        fetchBusinesses(accessToken); // Fetch businesses after successful login
+        fetchBusinesses(accessToken);
       } else {
         alert('Login was cancelled or failed');
       }
@@ -53,9 +55,6 @@ const Login = () => {
       .then((response) => response.json())
       .then((data) => {
         setUserData(data);
-        if (data.adaccounts && data.adaccounts.data.length > 0) {
-          fetchAdAccountDetails(data.adaccounts.data, accessToken);
-        }
       })
       .catch((error) => {
         setError('Error fetching data');
@@ -63,230 +62,146 @@ const Login = () => {
       });
   };
 
-  // Fetch businesses (brand names)
+  // Fetch Businesses (brand names)
   const fetchBusinesses = (accessToken) => {
     const businessesUrl = `https://graph.facebook.com/v19.0/me/businesses?fields=id,name&limit=100&access_token=${accessToken}`;
 
     fetch(businessesUrl)
       .then((response) => response.json())
       .then((data) => {
-        setBusinesses(data.data); // Set the list of businesses (brand names)
-        fetchBrandAdAccounts(data.data, accessToken); // Fetch ad accounts for each business
+        setBusinesses(data.data);
       })
       .catch((error) => {
         console.error('Error fetching businesses:', error);
       });
   };
 
-  // Fetch brand ad accounts for each business
-  const fetchBrandAdAccounts = (businesses, accessToken) => {
-    businesses.forEach((business) => {
-      const brandAdAccountUrl = `https://graph.facebook.com/v22.0/${business.id}/owned_ad_accounts?fields=id,name&access_token=${accessToken}`;
+  // Fetch Ad Accounts for a selected business
+  const fetchAdAccounts = (businessId, accessToken) => {
+    const brandAdAccountUrl = `https://graph.facebook.com/v22.0/${businessId}/owned_ad_accounts?fields=id,name&access_token=${accessToken}`;
 
-      fetch(brandAdAccountUrl)
-        .then((response) => response.json())
-        .then((data) => {
-          setAdAccounts((prevAccounts) => [
-            ...prevAccounts,
-            { businessId: business.id, adAccounts: data.data },
-          ]);
-        })
-        .catch((error) => {
-          console.error('Error fetching brand ad accounts:', error);
-        });
-    });
+    fetch(brandAdAccountUrl)
+      .then((response) => response.json())
+      .then((data) => {
+        setAdAccounts(data.data);
+      })
+      .catch((error) => {
+        console.error('Error fetching brand ad accounts:', error);
+      });
   };
 
-  // Function to fetch ad account details
-  const fetchAdAccountDetails = (adAccounts, accessToken) => {
-    adAccounts.forEach((adAccount) => {
-      const adAccountUrl = `https://graph.facebook.com/v22.0/${adAccount.id}?fields=name,account_id,business&access_token=${accessToken}`;
-
-      fetch(adAccountUrl)
-        .then((response) => response.json())
-        .then((adAccountData) => {
-          adAccount.name = adAccountData.name;
-          adAccount.account_name = adAccountData.account_id;
-          adAccount.business_id = adAccountData.business?.id;
-
-          // Update user data with ad account details and associated brand
-          setUserData((prevState) => ({
-            ...prevState,
-            adaccounts: {
-              data: prevState.adaccounts.data.map((account) =>
-                account.id === adAccount.id ? adAccount : account
-              ),
-            },
-          }));
-        })
-        .catch((error) => {
-          console.error('Error fetching ad account details:', error);
-        });
-    });
-  };
-
-  const handleAccountSelection = (event, adAccountId) => {
-    if (event.target.checked) {
-      setSelectedAccounts([...selectedAccounts, adAccountId]);
-    } else {
-      setSelectedAccounts(selectedAccounts.filter((id) => id !== adAccountId));
-    }
-  };
-
-  const handleSelectAllChange = (event) => {
-    if (event.target.checked) {
-      setSelectedAccounts(userData?.adaccounts?.data.map(account => account.id) || []);
-    } else {
-      setSelectedAccounts([]);
-    }
+  const handleBusinessSelection = (businessId) => {
+    setSelectedBusinessId(businessId);
+    fetchAdAccounts(businessId, userData?.accessToken);
   };
 
   return (
-    <div style={styles.container}>
-      <div style={styles.card}>
-        <button style={styles.button} onClick={loginWithAdsPermission}>
-          Connect with Facebook
-        </button>
+    <div className="flex">
+      <div className="w-64 bg-gray-800 text-white min-h-screen p-4">
+        <h2 className="text-2xl font-bold text-center mb-8">AdcreativeX</h2>
+        <ul className="space-y-4">
+          <li
+            className="cursor-pointer hover:bg-gray-700 p-2 rounded"
+            onClick={() => setSelectedSection('userInfo')}
+          >
+            User Info
+          </li>
+          <li
+            className="cursor-pointer hover:bg-gray-700 p-2 rounded"
+            onClick={() => setSelectedSection('businessInfo')}
+          >
+            Brands
+          </li>
+          {/* <li
+            className="cursor-pointer hover:bg-gray-700 p-2 rounded"
+            onClick={() => setSelectedSection('adAccountInfo')}
+          >
+            Ad Accounts
+          </li> */}
+        </ul>
+      </div>
 
-        {userData && (
-          <div style={styles.userInfo}>
-            <h2 style={styles.subheading}>User Info:</h2>
-            <p><strong>ID:</strong> {userData.id}</p>
-            <p><strong>Name:</strong> {userData.name}</p>
-            <p><strong>Email:</strong> {userData.email}</p>
+      <div className="flex-1 p-6">
+        <header className="bg-blue-600 text-white p-4 mb-6">
+          <h1 className="text-3xl font-bold">Facebook Ads Dashboard</h1>
+        </header>
 
-            {/* <h3 style={styles.subheading}>Ad Accounts:</h3> */}
-            {/* <div style={styles.checkboxContainer}>
-              <input
-                type="checkbox"
-                checked={selectedAccounts.length === userData.adaccounts.data.length}
-                onChange={handleSelectAllChange}
-                style={styles.checkbox}
-              />
-              <label>Select All</label>
-            </div> */}
+        <div className="text-gray-700">
+          <button
+            className="bg-blue-500 text-white py-2 px-4 rounded-md mb-6 transition-colors duration-300 hover:bg-blue-600"
+            onClick={loginWithAdsPermission}
+          >
+            Connect with Facebook
+          </button>
 
-            {userData.adaccounts && userData.adaccounts.data.length > 0 ? (
-              userData.adaccounts.data.map((adAccount) => (
-                <div key={adAccount.id} style={styles.accountItem}>
-                  {/* <input
-                    type="checkbox"
-                    checked={selectedAccounts.includes(adAccount.id)}
-                    onChange={(e) => handleAccountSelection(e, adAccount.id)}
-                    style={styles.checkbox}
-                  /> */}
-                  {/* <label>
-                    {adAccount.brand_name} ({adAccount.account_name})
-                  </label> */}
+          {userData && selectedSection === 'userInfo' && (
+            <div className="mb-6">
+              <h2 className="text-xl text-orange-500 mb-4">User Info:</h2>
+              <p><strong>ID:</strong> {userData.id}</p>
+              <p><strong>Name:</strong> {userData.name}</p>
+              <p><strong>Email:</strong> {userData.email}</p>
+            </div>
+          )}
+
+          {businesses && selectedSection === 'businessInfo' && (
+            <div>
+              <h3 className="text-lg text-orange-500 mb-4">Brands:</h3>
+              <ul className="space-y-3">
+                {businesses.map((business) => (
+                  <li key={business.id} className="flex items-center">
+                    <input
+                      type="checkbox"
+                      checked={selectedBusinessId === business.id}
+                      onChange={() => handleBusinessSelection(business.id)}
+                      className="mr-3"
+                    />
+                    <label>{business.name}</label>
+                  </li>
+                ))}
+              </ul>
+
+              {selectedBusinessId && (
+                <div className="mt-4 ml-6">
+                  <h4 className="text-lg text-blue-500 mb-2">ad accounts:</h4>
+                  <p className="text-sm flex flex-row">
+                  <input
+                      type="checkbox"
+                      className="mr-3"
+                    />
+                    {businesses.find((business) => business.id === selectedBusinessId)?.name}
+                  </p>
                 </div>
-              ))
-            ) : (
-              <p>No ad accounts available.</p>
-            )}
+              )}
+            </div>
+          )}
 
-            {adAccounts && adAccounts.length > 0 ? (
-              <>
-                <h3 style={styles.subheading}>Brand Ad Accounts:</h3>
-                <div>
-                  {adAccounts.map((businessAdAccounts) => (
-                    <div key={businessAdAccounts.businessId}>
-                      <h4 style={styles.businessName}>
-                        {businesses.find((business) => business.id === businessAdAccounts.businessId)?.name}
-                      </h4>
-                      <ul>
-                        {businessAdAccounts.adAccounts.map((adAccount) => (
-                          <li key={adAccount.id} style={styles.adAccountItem}>
-                            {adAccount.name}
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  ))}
-                </div>
-              </>
-            ) : (
-              <p>No brand ad accounts available.</p>
-            )}
-{/* 
-            {businesses && businesses.length > 0 ? (
-              <>
-                <h3 style={styles.subheading}>Businesses:</h3>
-                <ul>
-                  {businesses.map((business) => (
-                    <li key={business.id}>{business.name}</li>
-                  ))}
-                </ul>
-              </>
-            ) : (
-              <p>No businesses available.</p>
-            )} */}
-          </div>
-        )}
 
-        {error && <p>{error}</p>}
+
+
+
+
+          {adAccounts && selectedSection === 'adAccountInfo' && (
+            <div>
+              <h3 className="text-lg text-orange-500 mb-4">Ad Accounts:</h3>
+              <ul className="space-y-3">
+                {adAccounts.map((adAccount) => (
+                  <li key={adAccount.id} className="flex items-center">
+                    <input
+                      type="checkbox"
+                      className="mr-3"
+                    />
+                    <span>{adAccount.name} (ID: {adAccount.id})</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {error && <p className="text-red-500">{error}</p>}
+        </div>
       </div>
     </div>
   );
 };
 
-const styles = {
-  container: {
-    display: 'flex',
-    justifyContent: 'center',
-    alignItems: 'center',
-    height: '100vh',
-    backgroundColor: '#f0f8ff',
-    fontFamily: 'Arial, sans-serif',
-  },
-  card: {
-    padding: '20px',
-    backgroundColor: '#fff',
-    borderRadius: '10px',
-    boxShadow: '0 4px 8px rgba(0, 0, 0, 0.1)',
-    width: '350px',
-    textAlign: 'center',
-  },
-  subheading: {
-    color: '#FF6347',
-    marginBottom: '10px',
-  },
-  button: {
-    backgroundColor: '#007BFF',
-    color: '#fff',
-    padding: '10px 20px',
-    borderRadius: '5px',
-    border: 'none',
-    cursor: 'pointer',
-    marginBottom: '20px',
-    transition: 'background-color 0.3s',
-  },
-  checkboxContainer: {
-    marginBottom: '20px',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  checkbox: {
-    marginRight: '10px',
-  },
-  accountItem: {
-    marginLeft: '20px',
-    marginBottom: '10px',
-    textAlign: 'left',
-  },
-  adAccountItem: {
-    marginLeft: '30px',
-    marginBottom: '5px',
-    fontSize: '14px',
-  },
-  userInfo: {
-    marginTop: '20px',
-    color: '#333',
-  },
-  businessName: {
-    fontWeight: 'bold',
-    color: '#007BFF',
-  },
-};
-
-export default Login;
+export default Dashboard;
