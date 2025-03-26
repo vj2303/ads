@@ -91,9 +91,10 @@ const Dashboard = () => {
   };
 
   const handleBusinessSelection = (businessId) => {
-    setSelectedBusinessId(businessId);
+    setSelectedBusinessId((prevId) => (prevId === businessId ? null : businessId));
     fetchAdAccounts(businessId, userData?.accessToken);
   };
+  
 
   return (
     <div className="flex">
@@ -143,37 +144,45 @@ const Dashboard = () => {
             </div>
           )}
 
-          {businesses && selectedSection === 'businessInfo' && (
-            <div>
-              <h3 className="text-lg text-orange-500 mb-4">Brands:</h3>
-              <ul className="space-y-3">
-                {businesses.map((business) => (
-                  <li key={business.id} className="flex items-center">
-                    <input
-                      type="checkbox"
-                      checked={selectedBusinessId === business.id}
-                      onChange={() => handleBusinessSelection(business.id)}
-                      className="mr-3"
-                    />
-                    <label>{business.name}</label>
-                  </li>
-                ))}
-              </ul>
+{businesses && selectedSection === 'businessInfo' && (
+  <div className=''>
+    <h3 className="text-lg text-orange-500 mb-8">Brands:</h3>
+    <div className='flex gap-4'>
 
-              {selectedBusinessId && (
-                <div className="mt-4 ml-6">
-                  <h4 className="text-lg text-blue-500 mb-2">ad accounts:</h4>
-                  <p className="text-sm flex flex-row">
-                  <input
-                      type="checkbox"
-                      className="mr-3"
-                    />
-                    {businesses.find((business) => business.id === selectedBusinessId)?.name}
-                  </p>
-                </div>
-              )}
-            </div>
-          )}
+      <ul className="space-y-3">
+        {businesses.map((business) => (
+          <li key={business.id} className="flex items-center">
+            <input
+              type="checkbox"
+              checked={selectedBusinessId === business.id}
+              onChange={() => handleBusinessSelection(business.id)}
+              className="mr-3"
+            />
+            <label>{business.name}</label>
+          </li>
+        ))}
+      </ul>
+
+      <ul className='bg-gray-100 rounded-2xl p-2 mr-2'>
+        {selectedBusinessId && (
+          <div className="mt-2 ml-6 p-6">
+            <h4 className="text-lg text-blue-500 mb-2">Ad Accounts:</h4>
+
+            <p className="text-sm flex flex-row">
+              <input
+                type="checkbox"
+                className="mr-3"
+              />
+              {businesses.find((business) => business.id === selectedBusinessId)?.name}
+            </p>
+          </div>
+        )}
+      </ul>
+    </div>
+  </div>
+)}
+
+
 
 
 
