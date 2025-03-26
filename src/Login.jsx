@@ -35,6 +35,42 @@ const Dashboard = () => {
     loadFbSdk();
   }, []);
 
+  // Function to handle Save
+  const handleSave = () => {
+    if (!selectedBusinessId || adAccounts.length === 0) {
+      alert('Please select a business and at least one ad account.');
+      return;
+    }
+
+    const selectedAdAccounts = adAccounts.filter(account => account.selected).map(account => account.id);
+
+    if (selectedAdAccounts.length === 0) {
+      alert('No ad accounts selected.');
+      return;
+    }
+
+    // Send the selected Ad Accounts to the backend
+    fetch('http://localhost:5004/api/saveAdAccounts', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        businessId: selectedBusinessId,
+        adAccounts: selectedAdAccounts,
+      }),
+    })
+      .then((response) => response.json())
+      .then((data) => {
+        console.log('Save successful:', data);
+        alert('Ad Accounts saved successfully!');
+      })
+      .catch((error) => {
+        console.error('Error saving data:', error);
+        alert('Error saving ad accounts.');
+      });
+  };
+
   // Login with Facebook Ads permissions
   const loginWithAdsPermission = () => {
     FB.login(function (response) {
@@ -42,6 +78,7 @@ const Dashboard = () => {
         const accessToken = response.authResponse.accessToken;
         fetchUserData(accessToken);
         fetchBusinesses(accessToken);
+        alert('Login successful!'); // Alert after successful login
       } else {
         alert('Login was cancelled or failed');
       }
@@ -55,10 +92,12 @@ const Dashboard = () => {
       .then((response) => response.json())
       .then((data) => {
         setUserData(data);
+        alert('User data fetched successfully!'); // Alert after successful user data fetch
       })
       .catch((error) => {
         setError('Error fetching data');
         console.error(error);
+        alert('Error fetching user data');
       });
   };
 
@@ -70,31 +109,41 @@ const Dashboard = () => {
       .then((response) => response.json())
       .then((data) => {
         setBusinesses(data.data);
+        alert('Businesses fetched successfully!'); // Alert after successful businesses fetch
       })
       .catch((error) => {
         console.error('Error fetching businesses:', error);
+        alert('Error fetching businesses');
       });
   };
 
   // Fetch Ad Accounts for a selected business
   const fetchAdAccounts = (businessId, accessToken) => {
+    
     const brandAdAccountUrl = `https://graph.facebook.com/v22.0/${businessId}/owned_ad_accounts?fields=id,name&access_token=${accessToken}`;
 
     fetch(brandAdAccountUrl)
       .then((response) => response.json())
       .then((data) => {
-        setAdAccounts(data.data);
+        setAdAccounts(data.data); // Update ad accounts state
+        alert('Ad accounts fetched successfully!'); // Alert after successful ad account fetch
       })
       .catch((error) => {
         console.error('Error fetching brand ad accounts:', error);
+        alert('Error fetching ad accounts');
       });
   };
 
   const handleBusinessSelection = (businessId) => {
     setSelectedBusinessId((prevId) => (prevId === businessId ? null : businessId));
-    fetchAdAccounts(businessId, userData?.accessToken);
+
+    // Fetch Ad Accounts for the selected business
+    if (userData && userData.accessToken) {
+      fetchAdAccounts(businessId, userData.accessToken);
+    } else {
+      alert('Access token missing. Please log in again.');
+    }
   };
-  
 
   return (
     <div className="flex">
@@ -113,12 +162,6 @@ const Dashboard = () => {
           >
             Brands
           </li>
-          {/* <li
-            className="cursor-pointer hover:bg-gray-700 p-2 rounded"
-            onClick={() => setSelectedSection('adAccountInfo')}
-          >
-            Ad Accounts
-          </li> */}
         </ul>
       </div>
 
@@ -144,65 +187,51 @@ const Dashboard = () => {
             </div>
           )}
 
-{businesses && selectedSection === 'businessInfo' && (
-  <div className=''>
-    <h3 className="text-lg text-orange-500 mb-8">Brands:</h3>
-    <div className='flex gap-4'>
+          {businesses && selectedSection === 'businessInfo' && (
+            <div className=''>
+              <h3 className="text-lg text-orange-500 mb-8">Brands:</h3>
+              <div className='flex gap-4'>
+                <ul className="space-y-3">
+                  {businesses.map((business) => (
+                    <li key={business.id} className="flex items-center">
+                      <input
+                        type="checkbox"
+                        checked={selectedBusinessId === business.id}
+                        onChange={() => handleBusinessSelection(business.id)}
+                        className="mr-3"
+                      />
+                      <label>{business.name}</label>
+                    </li>
+                  ))}
+                </ul>
 
-      <ul className="space-y-3">
-        {businesses.map((business) => (
-          <li key={business.id} className="flex items-center">
-            <input
-              type="checkbox"
-              checked={selectedBusinessId === business.id}
-              onChange={() => handleBusinessSelection(business.id)}
-              className="mr-3"
-            />
-            <label>{business.name}</label>
-          </li>
-        ))}
-      </ul>
-
-      <ul className='bg-gray-100 rounded-2xl p-2 mr-2'>
-        {selectedBusinessId && (
-          <div className="mt-2 ml-6 p-6">
-            <h4 className="text-lg text-blue-500 mb-2">Ad Accounts:</h4>
-
-            <p className="text-sm flex flex-row">
-              <input
-                type="checkbox"
-                className="mr-3"
-              />
-              {businesses.find((business) => business.id === selectedBusinessId)?.name}
-            </p>
-          </div>
-        )}
-      </ul>
-    </div>
-  </div>
-)}
-
-
-
-
-
-
-
-
-          {adAccounts && selectedSection === 'adAccountInfo' && (
-            <div>
-              <h3 className="text-lg text-orange-500 mb-4">Ad Accounts:</h3>
-              <ul className="space-y-3">
-                {adAccounts.map((adAccount) => (
-                  <li key={adAccount.id} className="flex items-center">
-                    <input
-                      type="checkbox"
-                      className="mr-3"
-                    />
-                    <span>{adAccount.name} (ID: {adAccount.id})</span>
-                  </li>
-                ))}
-              </ul>
+                <ul className='bg-gray-100 rounded-2xl p-2 mr-2'>
+                  {selectedBusinessId && (
+                    <div className="mt-2 ml-6 p-6">
+                      <h4 className="text-lg text-blue-500 mb-2">Ad Accounts:</h4>
+                      {adAccounts && adAccounts.map((account) => (
+                        <p key={account.id} className="text-sm flex flex-row">
+                          <input
+                            type="checkbox"
+                            className="mr-3"
+                            onChange={() => {
+                              account.selected = !account.selected;
+                              setAdAccounts([...adAccounts]);
+                            }}
+                          />
+                          {account.name}
+                        </p>
+                      ))}
+                    </div>
+                  )}
+                </ul>
+              </div>
+              <button
+                className="text-white rounded-xl cursor-pointer bg-blue-600 px-8 py-2"
+                onClick={handleSave}
+              >
+                Save
+              </button>
             </div>
           )}
 
