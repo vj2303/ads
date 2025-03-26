@@ -3,22 +3,20 @@ import React, { useState, useEffect } from 'react';
 const Login = () => {
   const [userData, setUserData] = useState(null);
   const [error, setError] = useState(null);
-  const [selectedAccounts, setSelectedAccounts] = useState([]);
   const [businesses, setBusinesses] = useState([]);
-  const [adAccounts, setAdAccounts] = useState([]); // New state for brand ad accounts
-  const [selectedSection, setSelectedSection] = useState('userInfo'); // New state to track selected section
-  const [visibleAdAccounts, setVisibleAdAccounts] = useState({});
+  const [adAccounts, setAdAccounts] = useState([]);
+  const [selectedSection, setSelectedSection] = useState('userInfo');
+  const [visibleBusinesses, setVisibleBusinesses] = useState({});
+  const [selectedAdAccounts, setSelectedAdAccounts] = useState([]);
 
-
-
-  // Function to load the Facebook SDK
+  // Facebook SDK initialization
   useEffect(() => {
     const loadFbSdk = () => {
       if (window.FB) return;
 
       window.fbAsyncInit = function () {
         FB.init({
-          appId: '750785526415113',  // Replace with your actual Facebook App ID
+          appId: '750785526415113',
           cookie: true,
           xfbml: true,
           version: 'v22.0',
@@ -38,28 +36,27 @@ const Login = () => {
     loadFbSdk();
   }, []);
 
+  // Login with Ads Permission
   const loginWithAdsPermission = () => {
     FB.login(function (response) {
       if (response.authResponse) {
         const accessToken = response.authResponse.accessToken;
         fetchUserData(accessToken);
-        fetchBusinesses(accessToken); // Fetch businesses after successful login
+        fetchBusinesses(accessToken);
       } else {
         alert('Login was cancelled or failed');
       }
     }, { scope: 'ads_read, business_management', return_scopes: true });
   };
 
+  // Fetch User Data
   const fetchUserData = (accessToken) => {
-    const url = `https://graph.facebook.com/v22.0/me?fields=id,name,email,adaccounts&access_token=${accessToken}`;
+    const url = `https://graph.facebook.com/v22.0/me?fields=id,name,email&access_token=${accessToken}`;
 
     fetch(url)
       .then((response) => response.json())
       .then((data) => {
         setUserData(data);
-        if (data.adaccounts && data.adaccounts.data.length > 0) {
-          fetchAdAccountDetails(data.adaccounts.data, accessToken);
-        }
       })
       .catch((error) => {
         setError('Error fetching data');
@@ -67,92 +64,67 @@ const Login = () => {
       });
   };
 
-  // Fetch businesses (brand names)
+  // Fetch Businesses
   const fetchBusinesses = (accessToken) => {
     const businessesUrl = `https://graph.facebook.com/v19.0/me/businesses?fields=id,name&limit=100&access_token=${accessToken}`;
 
     fetch(businessesUrl)
       .then((response) => response.json())
       .then((data) => {
-        setBusinesses(data.data); // Set the list of businesses (brand names)
-        fetchBrandAdAccounts(data.data, accessToken); // Fetch ad accounts for each business
+        setBusinesses(data.data);
+        fetchBrandAdAccounts(data.data, accessToken);
       })
       .catch((error) => {
         console.error('Error fetching businesses:', error);
       });
   };
 
-  // Fetch brand ad accounts for each business
+  // Fetch Brand Ad Accounts
   const fetchBrandAdAccounts = (businesses, accessToken) => {
-    businesses.forEach((business) => {
+    const adAccountPromises = businesses.map((business) => {
       const brandAdAccountUrl = `https://graph.facebook.com/v22.0/${business.id}/owned_ad_accounts?fields=id,name&access_token=${accessToken}`;
 
-      fetch(brandAdAccountUrl)
+      return fetch(brandAdAccountUrl)
         .then((response) => response.json())
-        .then((data) => {
-          setAdAccounts((prevAccounts) => [
-            ...prevAccounts,
-            ...data.data,
-          ]);
-        })
-        .catch((error) => {
-          console.error('Error fetching brand ad accounts:', error);
-        });
+        .then((data) => ({
+          businessId: business.id,
+          businessName: business.name,
+          accounts: data.data
+        }));
     });
+
+    Promise.all(adAccountPromises)
+      .then((results) => {
+        const processedAdAccounts = results.flatMap(result => 
+          result.accounts.map(account => ({
+            ...account,
+            businessId: result.businessId,
+            businessName: result.businessName
+          }))
+        );
+        setAdAccounts(processedAdAccounts);
+      })
+      .catch((error) => {
+        console.error('Error fetching brand ad accounts:', error);
+      });
   };
 
-  // Function to fetch ad account details
-  const fetchAdAccountDetails = (adAccounts, accessToken) => {
-    adAccounts.forEach((adAccount) => {
-      const adAccountUrl = `https://graph.facebook.com/v22.0/${adAccount.id}?fields=name,account_id,business&access_token=${accessToken}`;
-
-      fetch(adAccountUrl)
-        .then((response) => response.json())
-        .then((adAccountData) => {
-          adAccount.name = adAccountData.name;
-          adAccount.account_name = adAccountData.account_id;
-          adAccount.business_id = adAccountData.business?.id;
-
-          // Update user data with ad account details and associated brand
-          setUserData((prevState) => ({
-            ...prevState,
-            adaccounts: {
-              data: prevState.adaccounts.data.map((account) =>
-                account.id === adAccount.id ? adAccount : account
-              ),
-            },
-          }));
-        })
-        .catch((error) => {
-          console.error('Error fetching ad account details:', error);
-        });
-    });
-  };
-
-  const handleAccountSelection = (event, adAccountId) => {
-    if (event.target.checked) {
-      setSelectedAccounts([...selectedAccounts, adAccountId]);
-    } else {
-      setSelectedAccounts(selectedAccounts.filter((id) => id !== adAccountId));
-    }
-  };
-
-  const handleSelectAllChange = (event) => {
-    if (event.target.checked) {
-      setSelectedAccounts(userData?.adaccounts?.data.map(account => account.id) || []);
-    } else {
-      setSelectedAccounts([]);
-    }
-  };
-
+  // Handle Business Visibility Toggle
   const handleBusinessToggle = (businessId) => {
-    setVisibleAdAccounts((prev) => ({
+    setVisibleBusinesses(prev => ({
       ...prev,
-      [businessId]: !prev[businessId], // Toggle the visibility of ad accounts
+      [businessId]: !prev[businessId]
     }));
   };
-  
-  
+
+  // Handle Ad Account Selection
+  const handleAdAccountSelect = (adAccountId) => {
+    setSelectedAdAccounts(prev => 
+      prev.includes(adAccountId)
+        ? prev.filter(id => id !== adAccountId)
+        : [...prev, adAccountId]
+    );
+  };
 
   return (
     <div className="flex">
@@ -170,7 +142,7 @@ const Login = () => {
             className="cursor-pointer hover:bg-gray-700 p-2 rounded"
             onClick={() => setSelectedSection('businessInfo')}
           >
-            Brands
+            Brands & Ad Accounts
           </li>
         </ul>
       </div>
@@ -190,51 +162,77 @@ const Login = () => {
             <p><strong>ID:</strong> {userData.id}</p>
             <p><strong>Name:</strong> {userData.name}</p>
             <p><strong>Email:</strong> {userData.email}</p>
-
-       
           </div>
         )}
-{selectedSection === 'businessInfo' && (
-  <div>
-    <h3 className="text-lg font-semibold text-orange-600">Brands:</h3>
 
-    <ul>
-  {businesses.map((business) => (
-    <li key={business.id} className="flex gap-8 items-center mb-2">
-      <div className="flex items-center">
-        <input
-          type="checkbox"
-          checked={visibleAdAccounts[business.id] || false} // Check if this business's ad accounts should be visible
-          onChange={() => handleBusinessToggle(business.id)} // Toggle the visibility when clicked
-          className="mr-2"
-        />
-        <span>{business.name}</span>
-      </div>
+        {selectedSection === 'businessInfo' && (
+          <div>
+            <h3 className="text-lg font-semibold text-orange-600">Brands & Ad Accounts:</h3>
+            <ul className="space-y-4">
+              {businesses.map((business) => {
+                const businessAdAccounts = adAccounts.filter(
+                  account => account.businessId === business.id
+                );
 
-      {/* Show ad accounts for the selected business */}
-      {visibleAdAccounts[business.id] && (
-        <div className="ml-1 mt-1 border p-2 border-gray-200 rounded-lg">  {/* Reduced margin */}
-          <h4 className="font-semibold text-orange-500">Ad Accounts:</h4>
-          <ul>
-            {adAccounts.map((adAccount) => (
-              <li key={adAccount.id}>{adAccount.name}</li> // Show all ad accounts (no filter)
-            ))}
-          </ul>
-        </div>
-      )}
-    </li>
-  ))}
-</ul>
+                return (
+                  <li key={business.id} className="border p-4 rounded-lg">
+                    <div className="flex items-center mb-2">
+                      <input
+                        type="checkbox"
+                        checked={!!visibleBusinesses[business.id]}
+                        onChange={() => handleBusinessToggle(business.id)}
+                        className="mr-2"
+                      />
+                      <h4 className="font-bold text-blue-600">Brand: {business.name}</h4>
+                    </div>
 
+                    {visibleBusinesses[business.id] && businessAdAccounts.length > 0 && (
+                      <ul className="pl-6 space-y-2">
+                        {businessAdAccounts.map((account) => (
+                          <li 
+                            key={account.id} 
+                            className="flex items-center text-gray-700"
+                          >
+                            <input
+                              type="checkbox"
+                              checked={selectedAdAccounts.includes(account.id)}
+                              onChange={() => handleAdAccountSelect(account.id)}
+                              className="mr-2"
+                            />
+                            Ad account: {account.name}
+                          </li>
+                        ))}
+                      </ul>
+                    )}
 
-     
-  </div>
-)}
+                    {visibleBusinesses[business.id] && businessAdAccounts.length === 0 && (
+                      <p className="text-gray-500 pl-6">No ad accounts found for this brand</p>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
 
+            {selectedAdAccounts.length > 0 && (
+              <div className="mt-4 p-4 bg-green-50 rounded-lg">
+                <h4 className="font-semibold text-green-700">Selected Ad Accounts:</h4>
+                <ul className="list-disc pl-5">
+                  {selectedAdAccounts.map(accountId => {
+                    const account = adAccounts.find(a => a.id === accountId);
+                    return (
+                      <li key={accountId}>
+                        {account ? account.name : 'Unknown Account'}
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
+            )}
+          </div>
+        )}
 
         {error && <p className="text-red-500">{error}</p>}
       </div>
-      
     </div>
   );
 };
