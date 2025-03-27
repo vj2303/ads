@@ -1,3 +1,4 @@
+import axios from 'axios';
 import React, { useState, useEffect } from 'react';
 
 const Login = () => {
@@ -6,8 +7,10 @@ const Login = () => {
   const [businesses, setBusinesses] = useState([]);
   const [adAccounts, setAdAccounts] = useState([]);
   const [selectedSection, setSelectedSection] = useState('userInfo');
-  const [visibleBusinesses, setVisibleBusinesses] = useState({});
-  const [selectedAdAccounts, setSelectedAdAccounts] = useState([]);
+  
+  // State to manage selected brands and ad accounts
+  const [selectedBusinesses, setSelectedBusinesses] = useState({});
+  const [selectedAdAccounts, setSelectedAdAccounts] = useState({});
 
   // Facebook SDK initialization
   useEffect(() => {
@@ -95,7 +98,7 @@ const Login = () => {
 
     Promise.all(adAccountPromises)
       .then((results) => {
-        const processedAdAccounts = results.flatMap(result => 
+        const processedAdAccounts = results.flatMap(result =>
           result.accounts.map(account => ({
             ...account,
             businessId: result.businessId,
@@ -109,21 +112,82 @@ const Login = () => {
       });
   };
 
-  // Handle Business Visibility Toggle
-  const handleBusinessToggle = (businessId) => {
-    setVisibleBusinesses(prev => ({
+  // Handle Brand Selection
+  const handleBusinessSelect = (businessId) => {
+    setSelectedBusinesses(prev => ({
       ...prev,
       [businessId]: !prev[businessId]
     }));
+
+    // If business is deselected, remove its ad accounts from selection
+    if (!selectedBusinesses[businessId]) {
+      const businessAdAccounts = adAccounts
+        .filter(account => account.businessId === businessId)
+        .map(account => account.id);
+      
+      const updatedSelectedAdAccounts = {...selectedAdAccounts};
+      businessAdAccounts.forEach(accountId => {
+        delete updatedSelectedAdAccounts[accountId];
+      });
+      
+      setSelectedAdAccounts(updatedSelectedAdAccounts);
+    }
   };
 
   // Handle Ad Account Selection
-  const handleAdAccountSelect = (adAccountId) => {
-    setSelectedAdAccounts(prev => 
-      prev.includes(adAccountId)
-        ? prev.filter(id => id !== adAccountId)
-        : [...prev, adAccountId]
+  const handleAdAccountSelect = (adAccountId, businessId) => {
+    setSelectedAdAccounts(prev => ({
+      ...prev,
+      [adAccountId]: !prev[adAccountId]
+    }));
+
+    // Automatically select/deselect the business when all its ad accounts are selected/deselected
+    const businessAdAccounts = adAccounts
+      .filter(account => account.businessId === businessId)
+      .map(account => account.id);
+    
+    const allSelected = businessAdAccounts.every(
+      accountId => (accountId === adAccountId ? !prev[accountId] : prev[accountId])
     );
+
+    setSelectedBusinesses(prev => ({
+      ...prev,
+      [businessId]: allSelected
+    }));
+  };
+
+  // Save Selected Accounts
+  const handleSaveAccount = async () => {
+    if (!userData || !userData.id) {
+      alert('User data is not available. Please log in again.');
+      return;
+    }
+
+    // Create accounts payload from selected ad accounts
+    const accountsPayload = {
+      id: userData.id,
+      accounts: Object.keys(selectedAdAccounts)
+        .filter(accountId => selectedAdAccounts[accountId])
+        .map(accountId => {
+          const account = adAccounts.find(a => a.id === accountId);
+          return {
+            name: account.businessName,
+            adAccount: account.id
+          };
+        })
+    };
+
+    try {
+      const res = await axios({
+        method: "post",
+        url: "https://aads-rho.vercel.app/accounts/",
+        data: accountsPayload
+      });
+      alert("Accounts saved successfully");
+    } catch (error) {
+      console.error("Error saving accounts:", error);
+      alert("Could not save the accounts");
+    }
   };
 
   return (
@@ -179,24 +243,24 @@ const Login = () => {
                     <div className="flex items-center mb-2">
                       <input
                         type="checkbox"
-                        checked={!!visibleBusinesses[business.id]}
-                        onChange={() => handleBusinessToggle(business.id)}
+                        checked={!!selectedBusinesses[business.id]}
+                        onChange={() => handleBusinessSelect(business.id)}
                         className="mr-2"
                       />
                       <h4 className="font-bold text-blue-600">Brand: {business.name}</h4>
                     </div>
 
-                    {visibleBusinesses[business.id] && businessAdAccounts.length > 0 && (
+                    {businessAdAccounts.length > 0 && (
                       <ul className="pl-6 space-y-2">
                         {businessAdAccounts.map((account) => (
-                          <li 
-                            key={account.id} 
+                          <li
+                            key={account.id}
                             className="flex items-center text-gray-700"
                           >
                             <input
                               type="checkbox"
-                              checked={selectedAdAccounts.includes(account.id)}
-                              onChange={() => handleAdAccountSelect(account.id)}
+                              checked={!!selectedAdAccounts[account.id]}
+                              onChange={() => handleAdAccountSelect(account.id, business.id)}
                               className="mr-2"
                             />
                             Ad account: {account.name}
@@ -205,7 +269,7 @@ const Login = () => {
                       </ul>
                     )}
 
-                    {visibleBusinesses[business.id] && businessAdAccounts.length === 0 && (
+                    {businessAdAccounts.length === 0 && (
                       <p className="text-gray-500 pl-6">No ad accounts found for this brand</p>
                     )}
                   </li>
@@ -213,23 +277,40 @@ const Login = () => {
               })}
             </ul>
 
-            {selectedAdAccounts.length > 0 && (
+            {Object.keys(selectedAdAccounts).filter(accountId => selectedAdAccounts[accountId]).length > 0 && (
               <div className="mt-4 p-4 bg-green-50 rounded-lg">
                 <h4 className="font-semibold text-green-700">Selected Ad Accounts:</h4>
                 <ul className="list-disc pl-5">
-                  {selectedAdAccounts.map(accountId => {
-                    const account = adAccounts.find(a => a.id === accountId);
-                    return (
-                      <li key={accountId}>
-                        {account ? account.name : 'Unknown Account'}
-                      </li>
-                    );
-                  })}
+                  {Object.keys(selectedAdAccounts)
+                    .filter(accountId => selectedAdAccounts[accountId])
+                    .map(accountId => {
+                      const account = adAccounts.find(a => a.id === accountId);
+                      return (
+                        <li key={accountId}>
+                          {account ? `${account.name} (${account.businessName})` : 'Unknown Account'}
+                        </li>
+                      );
+                    })}
                 </ul>
               </div>
             )}
           </div>
         )}
+
+        <div className='flex gap-4 mt-4'>
+          <button 
+            className='bg-blue-600 px-4 py-2 cursor-pointer text-white rounded-xl' 
+            onClick={handleSaveAccount}
+            disabled={Object.keys(selectedAdAccounts).filter(accountId => selectedAdAccounts[accountId]).length === 0}
+          >
+            Save Selected Accounts
+          </button>
+          <button 
+            className='bg-blue-600 px-4 py-2 cursor-pointer text-white rounded-xl'
+          >
+            Remove
+          </button>
+        </div>
 
         {error && <p className="text-red-500">{error}</p>}
       </div>
