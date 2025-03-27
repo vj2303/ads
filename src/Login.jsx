@@ -1,5 +1,7 @@
 import axios from 'axios';
 import React, { useState, useEffect } from 'react';
+import toast, { Toaster } from 'react-hot-toast';
+
 
 const Login = () => {
   const [userData, setUserData] = useState(null);
@@ -9,8 +11,15 @@ const Login = () => {
   const [selectedSection, setSelectedSection] = useState('userInfo');
   
   // State to manage selected brands and ad accounts
-  const [selectedBusinesses, setSelectedBusinesses] = useState({});
-  const [selectedAdAccounts, setSelectedAdAccounts] = useState({});
+  const [selectedBusinesses, setSelectedBusinesses] = useState(() => {
+    const savedBusinesses = localStorage.getItem('selectedBusinesses');
+    return savedBusinesses ? JSON.parse(savedBusinesses) : {};
+  });
+  
+  const [selectedAdAccounts, setSelectedAdAccounts] = useState(() => {
+    const savedAdAccounts = localStorage.getItem('selectedAdAccounts');
+    return savedAdAccounts ? JSON.parse(savedAdAccounts) : {};
+  });
 
   // Facebook SDK initialization
   useEffect(() => {
@@ -40,17 +49,20 @@ const Login = () => {
   }, []);
 
   // Login with Ads Permission
-  const loginWithAdsPermission = () => {
-    FB.login(function (response) {
-      if (response.authResponse) {
-        const accessToken = response.authResponse.accessToken;
-        fetchUserData(accessToken);
-        fetchBusinesses(accessToken);
-      } else {
-        alert('Login was cancelled or failed');
-      }
-    }, { scope: 'ads_read, business_management', return_scopes: true });
-  };
+// Modify loginWithAdsPermission to preserve existing selections
+const loginWithAdsPermission = () => {
+  FB.login(function (response) {
+    if (response.authResponse) {
+      const accessToken = response.authResponse.accessToken;
+      
+      // Fetch new data while preserving existing selections
+      fetchUserData(accessToken);
+      fetchBusinesses(accessToken);
+    } else {
+      alert('Login was cancelled or failed');
+    }
+  }, { scope: 'ads_read, business_management', return_scopes: true });
+};
 
   // Fetch User Data
   const fetchUserData = (accessToken) => {
@@ -70,7 +82,7 @@ const Login = () => {
   // Fetch Businesses
   const fetchBusinesses = (accessToken) => {
     const businessesUrl = `https://graph.facebook.com/v19.0/me/businesses?fields=id,name&limit=100&access_token=${accessToken}`;
-
+  
     fetch(businessesUrl)
       .then((response) => response.json())
       .then((data) => {
@@ -114,32 +126,50 @@ const Login = () => {
 
   // Handle Brand Selection
   const handleBusinessSelect = (businessId) => {
+    const updatedBusinesses = {
+      ...selectedBusinesses,
+      [businessId]: !selectedBusinesses[businessId]
+    };
+    setSelectedBusinesses(updatedBusinesses);
+    localStorage.setItem('selectedBusinesses', JSON.stringify(updatedBusinesses));
+
+    // Toggle the business selection
+    const isBusinessSelected = !selectedBusinesses[businessId];
+
     setSelectedBusinesses(prev => ({
       ...prev,
-      [businessId]: !prev[businessId]
+      [businessId]: isBusinessSelected
     }));
-
-    // If business is deselected, remove its ad accounts from selection
-    if (!selectedBusinesses[businessId]) {
-      const businessAdAccounts = adAccounts
-        .filter(account => account.businessId === businessId)
-        .map(account => account.id);
-      
-      const updatedSelectedAdAccounts = {...selectedAdAccounts};
-      businessAdAccounts.forEach(accountId => {
-        delete updatedSelectedAdAccounts[accountId];
-      });
-      
-      setSelectedAdAccounts(updatedSelectedAdAccounts);
-    }
+  
+    // Get all ad accounts for this business
+    const businessAdAccounts = adAccounts
+      .filter(account => account.businessId === businessId)
+      .map(account => account.id);
+    
+    // Update selected ad accounts based on business selection
+    const updatedSelectedAdAccounts = {...selectedAdAccounts};
+    businessAdAccounts.forEach(accountId => {
+      updatedSelectedAdAccounts[accountId] = isBusinessSelected;
+    });
+    
+    setSelectedAdAccounts(updatedSelectedAdAccounts);
   };
 
   // Handle Ad Account Selection
   const handleAdAccountSelect = (adAccountId, businessId) => {
-    setSelectedAdAccounts(prev => ({
-      ...prev,
-      [adAccountId]: !prev[adAccountId]
-    }));
+
+    const updatedAdAccounts = {
+      ...selectedAdAccounts,
+      [adAccountId]: !selectedAdAccounts[adAccountId]
+    };
+    setSelectedAdAccounts(updatedAdAccounts);
+    localStorage.setItem('selectedAdAccounts', JSON.stringify(updatedAdAccounts));
+
+
+    // setSelectedAdAccounts(prev => ({
+    //   ...prev,
+    //   [adAccountId]: !prev[adAccountId]
+    // }));
 
     // Automatically select/deselect the business when all its ad accounts are selected/deselected
     const businessAdAccounts = adAccounts
@@ -158,40 +188,60 @@ const Login = () => {
 
   // Save Selected Accounts
   const handleSaveAccount = async () => {
-    if (!userData || !userData.id) {
-      alert('User data is not available. Please log in again.');
-      return;
-    }
-
-    // Create accounts payload from selected ad accounts
-    const accountsPayload = {
-      id: userData.id,
-      accounts: Object.keys(selectedAdAccounts)
-        .filter(accountId => selectedAdAccounts[accountId])
-        .map(accountId => {
-          const account = adAccounts.find(a => a.id === accountId);
-          return {
-            name: account.businessName,
-            adAccount: account.id
-          };
-        })
-    };
-
     try {
-      const res = await axios({
-        method: "post",
-        url: "https://aads-rho.vercel.app/accounts/",
-        data: accountsPayload
+      if (!userData || !userData.id) {
+        toast.error('User data is not available. Please log in again.');
+        return;
+      }
+  
+      // Create accounts payload from selected ad accounts
+      const accountsPayload = {
+        id: userData.id,
+        accounts: Object.keys(selectedAdAccounts)
+          .filter(accountId => selectedAdAccounts[accountId])
+          .map(accountId => {
+            const account = adAccounts.find(a => a.id === accountId);
+            return {
+              name: account.businessName,
+              adAccount: account.id
+            };
+          })
+      };
+  
+      // Assuming you have an API call to save the accounts
+      // Replace this with your actual API call
+      // const response = await saveAccounts(accountsPayload);
+  
+      // Show success toast
+      toast.success('Accounts successfully saved!', {
+        duration: 4000, // show for 4 seconds
+        position: 'top-right',
+        style: {
+          background: '#4CAF50',
+          color: 'white',
+          padding: '12px',
+          borderRadius: '8px'
+        }
       });
-      alert("Accounts saved successfully");
+  
     } catch (error) {
-      console.error("Error saving accounts:", error);
-      alert("Could not save the accounts");
+      // Show error toast if something goes wrong
+      toast.error('Failed to save accounts. Please try again.', {
+        duration: 4000,
+        position: 'top-right',
+        style: {
+          background: '#F44336',
+          color: 'white',
+          padding: '12px',
+          borderRadius: '8px'
+        }
+      });
     }
   };
 
   return (
     <div className="flex">
+        <Toaster />
       {/* Sidebar */}
       <div className="w-64 bg-gray-800 text-white min-h-screen p-4">
         <h2 className="text-2xl font-bold text-center mb-8">AdcreativeX</h2>
@@ -277,7 +327,7 @@ const Login = () => {
               })}
             </ul>
 
-            {Object.keys(selectedAdAccounts).filter(accountId => selectedAdAccounts[accountId]).length > 0 && (
+            {/* {Object.keys(selectedAdAccounts).filter(accountId => selectedAdAccounts[accountId]).length > 0 && (
               <div className="mt-4 p-4 bg-green-50 rounded-lg">
                 <h4 className="font-semibold text-green-700">Selected Ad Accounts:</h4>
                 <ul className="list-disc pl-5">
@@ -293,11 +343,12 @@ const Login = () => {
                     })}
                 </ul>
               </div>
-            )}
+            )} */}
           </div>
         )}
 
         <div className='flex gap-4 mt-4'>
+
           <button 
             className='bg-blue-600 px-4 py-2 cursor-pointer text-white rounded-xl' 
             onClick={handleSaveAccount}
@@ -305,11 +356,11 @@ const Login = () => {
           >
             Save Selected Accounts
           </button>
-          <button 
+          {/* <button 
             className='bg-blue-600 px-4 py-2 cursor-pointer text-white rounded-xl'
           >
             Remove
-          </button>
+          </button> */}
         </div>
 
         {error && <p className="text-red-500">{error}</p>}
